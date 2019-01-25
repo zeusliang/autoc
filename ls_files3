@@ -1,0 +1,100 @@
+#!/bin/bash
+# foreach tomcat webaspps project
+
+# get file last modify time
+function get_ftime(){
+	#echo $1
+	# .java file
+	sf_date=`stat "$1" | grep 'Change' | awk '{print $2}' | cut -d '.' -f 1`
+	sf_sec=`stat "$1" | grep 'Change' | awk '{print $3}' | cut -d '.' -f 1`
+	#echo $sf_date $sf_sec 
+	# date to timesamp
+	sf_mtime=`date -d "$sf_date $sf_sec" +%s`
+	#echo $sf_mtime
+
+	# .class file modify time
+
+	cf_date=`stat "$2" | grep 'Change' | awk '{print $2}' | cut -d '.' -f 1`
+	cf_sec=`stat "$2" | grep 'Change' | awk '{print $3}' | cut -d '.' -f 1`
+
+	cf_mtime=`date -d "$cf_date $cf_sec" +%s`
+	#echo "cf_mtime=$cf_mtime, sf_mtime=$sf_mtime"
+	
+	#  need compile
+	if test $sf_mtime -gt $cf_mtime
+	then
+		echo 1
+	fi
+	
+	# no need compile
+	if test $sf_mtime -lt $cf_mtime
+	then
+		echo 0
+	fi
+}
+#get_ftime $1 $2
+#s=$(get_ftime $1 $2)
+#echo $s
+
+# read_dir
+function read_dir(){
+	for f in `ls $1`
+	do
+		if  test -d "$1/$f" 
+		then
+			#echo "$1/$f...d"
+			read_dir "$1/$f"
+		else
+		#	echo "$1/$f"
+			ext=`echo $1/$f | cut -d '.' -f 2-`
+			fname=`echo $1/$f | cut -d '.' -f 1`
+			#echo $fname"."$ext
+			if test $ext == 'java'
+			then
+				#echo '.java'
+				# if exist against class file
+				# get .class and .java file modify time.
+				# if .class modify '<' .java modify just recompile.
+				# if not exist against .class file just compile.
+				if test -f $fname".class"
+				then
+					#echo '.class'
+					rs=$(get_ftime $fname".java" $fname".class")
+					if test $rs = 0
+					then
+						#echo "need recompile"
+						echo 0
+					fi
+
+					if test $rs = 1
+					then
+						echo 1
+					fi
+				fi
+			fi
+		fi
+	done
+}
+#read_dir $1
+
+function start(){
+# controller
+if test -d $CATALINA_HOME/webapps/$1
+then
+	echo "$CATALINA_HOME/webapps/$1"
+	rs=$(read_dir "$CATALINA_HOME/webapps/$1")
+	#echo $rs
+	if test $rs = 1
+	then
+		echo 'need compile'
+	fi
+
+	if test $rs = 0
+	then
+		echo "no need compile"
+	fi
+else
+	echo "not exist $CATALINA_HOME/webapps/$1"
+fi
+}
+start $1
